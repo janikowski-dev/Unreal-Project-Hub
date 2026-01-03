@@ -12,9 +12,13 @@ public class UnrealToolchain(Action<string> log, Action clearLogs)
     private const int UnrealEngineKillCheckIntervalInMs = 250;
     private const int UnrealEngineKillTimeoutInMs = 8_000;
 
-    public void LaunchUnrealEngine(string uprojectPath)
+    public void LaunchUnrealEngine(string uprojectPath, bool keepLogs = false)
     {
-        ClearLogs();
+        if (!keepLogs)
+        {
+            ClearLogs();
+        }
+        
         Log("Starting Unreal Engine");
         
         Process.Start(new ProcessStartInfo
@@ -71,7 +75,7 @@ public class UnrealToolchain(Action<string> log, Action clearLogs)
         await GenerateIdeFilesAsync(uprojectPath);
 
         Log("Launching Unreal Editor...");
-        LaunchUnrealEngine(uprojectPath);
+        LaunchUnrealEngine(uprojectPath, true);
 
         Log("Done.");
     }
