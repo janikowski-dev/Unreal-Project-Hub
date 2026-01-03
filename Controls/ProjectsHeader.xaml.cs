@@ -21,15 +21,4 @@ public partial class ProjectsHeader
     {
         InitializeComponent();
     }
-    
-
-    private void RaiseClickCallback(object _, MouseButtonEventArgs __)
-    {
-        if (!ClickCommand.CanExecute(DataContext))
-        {
-            return;
-        }
-            
-        ClickCommand.Execute(DataContext);
-    }
 }

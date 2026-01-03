@@ -4,15 +4,6 @@
              StartupUri="MainWindow.xaml">
     
     <Application.Resources>
-        <Color x:Key="UE_BG">#1E1E1E</Color>
-        <Color x:Key="UE_PANEL">#252526</Color>
-        <Color x:Key="UE_ACCENT">#0E639C</Color>
-        <Color x:Key="UE_TEXT">#D4D4D4</Color>
-
-        <SolidColorBrush x:Key="BgBrush" Color="{StaticResource UE_BG}" />
-        <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource UE_PANEL}" />
-        <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource UE_ACCENT}" />
-        <SolidColorBrush x:Key="TextBrush" Color="{StaticResource UE_TEXT}" />
         
         <Style x:Key="PopupMenuButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
