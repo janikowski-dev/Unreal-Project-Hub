@@ -1,6 +1,4 @@
 ﻿using System.Collections.ObjectModel;
-using System.IO;
-using System.Text.Json;
 using System.Windows;
 using Microsoft.Win32;
 using UnrealProjectHub.Commands;
@@ -21,87 +19,56 @@ public class MainViewModel
     public RelayCommand OpenInExplorerCommand { get; private set; }
     public RelayCommand RebuildAndLaunchCommand { get; private set; }
 
-    private static readonly string CacheFile = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "UnrealEngineHub",
-        "projects.json"
-    );
-
     public MainViewModel()
     {
-        InitCommands(new UnrealProjectService(Log));
-        LoadProjects();
-        SortProjects();
+        UnrealToolchain toolchain = new(Log, ClearLogs);
+        ProjectsStore store = new(Refresh);
+        InitCommands(toolchain, store);
+        Init(store);
     }
 
-    private async Task SafeRebuildAndLaunchAsync(UnrealProjectService service, ProjectEntry project)
+    private void InitCommands(UnrealToolchain toolchain, ProjectsStore store)
     {
-        ClearLogs();
-
-        try
+        RebuildAndLaunchCommand = new RelayCommand(project =>
         {
-            await RebuildAndLaunchAsync(service, project);
-        }
-        catch (Exception caughtException)
-        {
-            Log($"Error: {caughtException.Message}");
-        }
-    }
-
-    private void AddProject()
-    {
-        if (!TryAddProject())
-        {
-            return;
-        }
-
-        SortProjects();
-        SaveProjects();
-    }
-
-    private void SaveProjects()
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(CacheFile)!);
-
-        File.WriteAllText(CacheFile, JsonSerializer.Serialize(Projects, new JsonSerializerOptions
-        {
-            WriteIndented = true
-        }));
-    }
-
-    private void LoadProjects()
-    {
-        if (!File.Exists(CacheFile))
-        {
-            return;
-        }
-
-        List<ProjectEntry>? projects = JsonSerializer.Deserialize<List<ProjectEntry>>(File.ReadAllText(CacheFile));
-
-        if (projects == null)
-        {
-            return;
-        }
-
-        foreach (ProjectEntry project in projects.OrderByDescending(p => p.LastOpened))
-        {
-            Projects.Add(project);
-        }
-    }
-
-    private void SortProjects()
-    {
-        List<ProjectEntry> sortedProjects = Projects.OrderByDescending(p => p.LastOpened).ToList();
-
-        Projects.Clear();
+            try
+            {
+                _ = RebuildAndLaunchAsync(toolchain, project);
+            }
+            catch (Exception caughtException)
+            {
+                Log($"Error: {caughtException.Message}");
+            }
+        });
+        OpenUnrealEngineCommand = new RelayCommand(project => OpenUnrealEngine(toolchain, project));
+        OpenInExplorerCommand = new RelayCommand(project => OpenInExplorer(toolchain, project));
+        OpenIdeCommand = new RelayCommand(project => OpenIde(toolchain, project));
         
-        foreach (ProjectEntry project in sortedProjects)
-        {
-            Projects.Add(project);
-        }
+        RemoveProjectCommand = new RelayCommand(project => RemoveProject(store, project));
+        AddProjectCommand = new SimpleCommand(() => AddProject(store));
     }
 
-    private bool TryAddProject()
+    private async Task RebuildAndLaunchAsync(UnrealToolchain toolchain, ProjectEntry project)
+    {
+        await toolchain.RebuildAndLaunchAsync(project.UProjectPath);
+    }
+
+    private void OpenInExplorer(UnrealToolchain toolchain, ProjectEntry project)
+    {
+        toolchain.OpenInExplorer(project.Directory);
+    }
+
+    private void OpenIde(UnrealToolchain toolchain, ProjectEntry project)
+    {
+        toolchain.LaunchIde(project.SolutionPath);
+    }
+
+    private void OpenUnrealEngine(UnrealToolchain toolchain, ProjectEntry project)
+    {
+        toolchain.LaunchUnrealEngine(project.UProjectPath);
+    }
+
+    private void AddProject(ProjectsStore store)
     {
         OpenFileDialog dialog = new()
         {
@@ -110,39 +77,20 @@ public class MainViewModel
 
         if (dialog.ShowDialog() != true)
         {
-            return false;
+            return;
         }
 
-        string uproject = dialog.FileName;
-
-        if (Projects.Any(p => string.Equals(p.UProjectPath, uproject, StringComparison.OrdinalIgnoreCase)))
-        {
-            return false;
-        }
-
-        string directory = Path.GetDirectoryName(uproject)!;
-        string sln = Directory.GetFiles(directory, "*.sln").FirstOrDefault() ?? "";
-
-        Projects.Add(new ProjectEntry
-        {
-            Name = Path.GetFileNameWithoutExtension(uproject),
-            UProjectPath = uproject,
-            SolutionPath = sln,
-            Directory = directory,
-            LastOpened = DateTime.Now
-        });
-        
-        return true;
+        store.AddProject(dialog.FileName);
     }
 
-    private void RemoveProject(ProjectEntry project)
+    private void RemoveProject(ProjectsStore store, ProjectEntry project)
     {
-        Projects.Remove(project);
+        store.RemoveProject(project);
     }
 
-    private void ClearLogs()
+    private void Init(ProjectsStore store)
     {
-        Logs.Clear();
+        store.Init();
     }
 
     private void Log(string message)
@@ -153,37 +101,18 @@ public class MainViewModel
         });
     }
 
-    private async Task RebuildAndLaunchAsync(UnrealProjectService service, ProjectEntry project)
+    private void ClearLogs()
     {
-        await service.RebuildAndLaunchAsync(project.UProjectPath);
+        Logs.Clear();
     }
 
-    private void OpenInExplorer(UnrealProjectService service, ProjectEntry project)
+    private void Refresh(IReadOnlyCollection<ProjectEntry> projects)
     {
-        service.OpenInExplorer(project.Directory);
-    }
-
-    private void OpenIde(UnrealProjectService service, ProjectEntry project)
-    {
-        service.LaunchIde(project.SolutionPath);
-    }
-
-    private void OpenUnrealEngine(UnrealProjectService service, ProjectEntry project)
-    {
-        service.LaunchUnrealEngine(project.UProjectPath);
-    }
-
-    private void InitCommands(UnrealProjectService service)
-    {
-        RebuildAndLaunchCommand = new RelayCommand(project => _ = SafeRebuildAndLaunchAsync(service, project));
-        OpenUnrealEngineCommand = new RelayCommand(project => OpenUnrealEngine(service, project));
-        OpenInExplorerCommand = new RelayCommand(project => OpenInExplorer(service, project));
-        OpenIdeCommand = new RelayCommand(project => OpenIde(service, project));
-        RemoveProjectCommand = new RelayCommand(project =>
+        Projects.Clear();
+        
+        foreach (ProjectEntry project in projects)
         {
-            RemoveProject(project);
-            SaveProjects();
-        });
-        AddProjectCommand = new SimpleCommand(AddProject);
+            Projects.Add(project);
+        }
     }
 }
